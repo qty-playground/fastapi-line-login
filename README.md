@@ -132,3 +132,11 @@ fastapi dev main.py
   - Session 加密金鑰強化
   - 重新設計 redirect URI 防止開放重定向
   - 使用 HTTPS 保障傳輸安全
+
+---
+## 🔒 敏感資訊安全聲明
+
+- 本專案中出現的 `CLIENT_ID`、`CLIENT_SECRET` 等敏感資訊均已經作無效處理。
+- 這些值僅作為範例用途，**在實際部署前必須換成自己的正式資料**。
+- 專案開發過程中曾經考慮或使用過的任何 secret，均已清除並無法再被使用。
+- 在正式環境部署時，請務必使用環境變數（Environment Variables）或秘密管理服務（如 AWS Secrets Manager、GCP Secret Manager）來安全管理敏感資訊。
