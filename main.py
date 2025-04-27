@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 import httpx  # ⭐ 需要安裝 httpx: pip install httpx
+import secrets
+
 
 # 你的Channel設定
 CLIENT_ID = "2007334823"
@@ -12,16 +14,24 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="your-very-secret-key")
 
 
+def generate_state():
+    return secrets.token_urlsafe(16)  # 產生一個安全的亂數字串
+
+
 @app.get("/", response_class=HTMLResponse)
-async def root():
+async def root(request: Request):
+    state = generate_state()
+    request.session["state"] = state
+
     line_login_url = (
         "https://access.line.me/oauth2/v2.1/authorize"
-        "?response_type=code"
-        "&client_id=2007334823"
-        "&redirect_uri=http%3A%2F%2F127.0.0.1%3A8000%2Fcallback"
-        "&state=randomstring123"
-        "&scope=profile%20openid%20email"
+        f"?response_type=code"
+        f"&client_id={CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
+        f"&state={state}"
+        f"&scope=profile%20openid%20email"
     )
+
     return f"""
     <html>
         <head>
@@ -39,12 +49,15 @@ async def root():
 async def callback(request: Request):
     params = dict(request.query_params)
     code = params.get("code")
-    state = params.get("state")
+    returned_state = params.get("state")
     error = params.get("error")
 
     if error:
         return f"<h1>授權失敗: {error}</h1>"
 
+    session_state = request.session.get("state")
+    if not returned_state or not session_state or returned_state != session_state:
+        return "<h1>無效的 state，可能有攻擊風險！</h1>"
     if not code:
         return "<h1>沒有收到授權資訊</h1>"
 
