@@ -3,11 +3,13 @@ from fastapi.responses import HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 import httpx  # ⭐ 需要安裝 httpx: pip install httpx
 import secrets
+import base64
+import hashlib
 
 
 # 你的Channel設定
 CLIENT_ID = "2007334823"
-CLIENT_SECRET = "261b730985e4afb0466c06604787cf96"
+# CLIENT_SECRET = "261b730985e4afb0466c06604787cf96"  # ❌ 現在不使用，PKCE取代
 REDIRECT_URI = "http://127.0.0.1:8000/callback"
 
 app = FastAPI()
@@ -17,11 +19,21 @@ app.add_middleware(SessionMiddleware, secret_key="your-very-secret-key")
 def generate_state():
     return secrets.token_urlsafe(16)  # 產生一個安全的亂數字串
 
+def generate_code_verifier():
+    return secrets.token_urlsafe(64)  # 產生強隨機亂數
+
+def generate_code_challenge(code_verifier):
+    code_challenge = hashlib.sha256(code_verifier.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(code_challenge).decode("utf-8").rstrip("=")
+
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     state = generate_state()
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
     request.session["state"] = state
+    request.session["code_verifier"] = code_verifier
 
     line_login_url = (
         "https://access.line.me/oauth2/v2.1/authorize"
@@ -30,6 +42,8 @@ async def root(request: Request):
         f"&redirect_uri={REDIRECT_URI}"
         f"&state={state}"
         f"&scope=profile%20openid%20email"
+        f"&code_challenge={code_challenge}"
+        f"&code_challenge_method=S256"
     )
 
     return f"""
@@ -64,12 +78,13 @@ async def callback(request: Request):
     # ⭐⭐ 這裡開始進行 Token 兌換 ⭐⭐
     token_url = "https://api.line.me/oauth2/v2.1/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    code_verifier = request.session.get("code_verifier")
     data = {
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": REDIRECT_URI,
         "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "code_verifier": code_verifier,
     }
 
     async with httpx.AsyncClient() as client:
